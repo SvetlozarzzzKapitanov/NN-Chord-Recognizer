@@ -3,19 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual environment
 .venv/
-
-# Models
-models/
-
-# Audio data (large, not needed in repo)
-data/
-
-# IDE
 .idea/
 
-# OS junk
+
+
 .DS_Store
 Thumbs.db

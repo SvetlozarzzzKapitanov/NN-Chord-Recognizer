@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-# Folder names must match your data folders exactly:
+# The directory names define the labels !! must correspond to the dataset structure
 CHORDS = ["Am", "C", "Em", "F", "G"]
 CHORD_TO_IDX = {c: i for i, c in enumerate(CHORDS)}
 IDX_TO_CHORD = {i: c for c, i in CHORD_TO_IDX.items()}
@@ -63,20 +63,26 @@ def main():
     X, y = load_dataset()
     print(f"Dataset: X={X.shape}, y={y.shape} (classes={len(CHORDS)})")
 
-    # Stratified split keeps class balance
+    # Stratified split keeps class balance. We are using a 75% training + 25% testing split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=SEED, stratify=y
     )
 
-    # Standardize features using train stats (important)
+    # we normalize each feature dimension: x` = x-μ / σ
     mu = X_train.mean(axis=0, keepdims=True)
     sigma = X_train.std(axis=0, keepdims=True) + 1e-9
     X_train = (X_train - mu) / sigma
     X_test = (X_test - mu) / sigma
 
+    # Use gpu if available, else use cpu
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # crating the model | input size = num features | output size = number of chords |
     model = MLP(in_dim=X.shape[1], num_classes=len(CHORDS)).to(device)
+
+    # optimizer, lr = learning rate -> too high = unstable / too low = slow
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+
     loss_fn = nn.CrossEntropyLoss()
 
     X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
