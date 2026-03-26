@@ -34,3 +34,12 @@ def extract_features_from_file(path: str) -> np.ndarray:
     y = load_audio(path)
     c = extract_chroma(y)
     return chroma_stats(c)
+
+def extract_features(y: np.ndarray, sr: int = SR) -> np.ndarray:
+    y = y.astype(np.float32)
+
+    # normalize (както в load_audio)
+    y = y / (np.max(np.abs(y)) + 1e-9)
+
+    c = extract_chroma(y, sr=sr)
+    return chroma_stats(c)
