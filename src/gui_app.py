@@ -1,6 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+import threading
+import time
+import numpy as np
+import librosa
+import sounddevice as sd
+
 from realtime_predict import RealTimeChordRecognizer
 
 
@@ -9,7 +15,7 @@ class ChordRecognizerApp:
         self.root = root
         self.root.title("Real-Time Chord Recognizer")
         self.root.geometry("1280x768")
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
 
         try:
             self.recognizer = RealTimeChordRecognizer()
@@ -40,53 +46,79 @@ class ChordRecognizerApp:
         self.energy_var = tk.StringVar(value="Signal energy: 0.0000")
         self.top_var = tk.StringVar(value="Top3: -")
 
-        status_label = ttk.Label(
-            main,
-            textvariable=self.status_var,
-            font=("Segoe UI", 11)
-        )
-        status_label.pack(pady=(0, 10))
+        ttk.Label(main, textvariable=self.status_var, font=("Segoe UI", 11)).pack(pady=(0, 10))
 
-        detected_title = ttk.Label(
-            main,
-            text="Detected Chord",
-            font=("Segoe UI", 12)
-        )
-        detected_title.pack()
+        ttk.Label(main, text="Detected Chord", font=("Segoe UI", 12)).pack()
 
-        detected_label = ttk.Label(
+        ttk.Label(
             main,
             textvariable=self.detected_var,
             font=("Segoe UI", 28, "bold")
-        )
-        detected_label.pack(pady=(5, 15))
+        ).pack(pady=(5, 15))
 
-        raw_label = ttk.Label(main, textvariable=self.raw_var, font=("Segoe UI", 10))
-        raw_label.pack()
+        ttk.Label(main, textvariable=self.raw_var, font=("Segoe UI", 10)).pack()
+        ttk.Label(main, textvariable=self.confidence_var, font=("Segoe UI", 10)).pack()
+        ttk.Label(main, textvariable=self.energy_var, font=("Segoe UI", 10)).pack()
 
-        confidence_label = ttk.Label(main, textvariable=self.confidence_var, font=("Segoe UI", 10))
-        confidence_label.pack()
-
-        energy_label = ttk.Label(main, textvariable=self.energy_var, font=("Segoe UI", 10))
-        energy_label.pack()
-
-        top_label = ttk.Label(
+        ttk.Label(
             main,
             textvariable=self.top_var,
             font=("Segoe UI", 10),
             wraplength=440,
             justify="center"
-        )
-        top_label.pack(pady=(8, 18))
+        ).pack(pady=(8, 18))
+
+        # ================= Buttons =================
 
         buttons = ttk.Frame(main)
-        buttons.pack()
+        buttons.pack(pady=(0, 10))
 
         self.start_button = ttk.Button(buttons, text="Start Listening", command=self.start_listening)
         self.start_button.grid(row=0, column=0, padx=8)
 
         self.stop_button = ttk.Button(buttons, text="Stop Listening", command=self.stop_listening)
         self.stop_button.grid(row=0, column=1, padx=8)
+
+        # ================= Demo buttons =================
+
+        demo_frame = ttk.LabelFrame(main, text="Demo (Pre-recorded Chords)")
+        demo_frame.pack(pady=10)
+
+        chords = ["C", "G", "Am", "F", "D", "Em"]
+
+        for i, chord in enumerate(chords):
+            ttk.Button(
+                demo_frame,
+                text=f"Play {chord}",
+                command=lambda c=chord: self.play_and_predict(f"../demo_samples/{c}.wav")
+            ).grid(row=0, column=i, padx=5, pady=5)
+
+    # ================= Demo Logic =================
+
+    def play_and_predict(self, path):
+        def worker():
+            try:
+                y, sr = librosa.load(path, sr=self.recognizer.sr, mono=True)
+
+                # Play audio so audience hears it
+                sd.play(y, sr)
+
+                chunk_size = self.recognizer.hop_samples
+
+                for i in range(0, len(y), chunk_size):
+                    chunk = y[i:i + chunk_size]
+
+                    self.recognizer.feed_audio_chunk(chunk)
+                    self.recognizer.process_buffer()
+
+                    time.sleep(self.recognizer.hop_seconds)
+
+            except Exception as e:
+                messagebox.showerror("Playback Error", str(e))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # ================= Controls =================
 
     def start_listening(self):
         try:
@@ -99,6 +131,8 @@ class ChordRecognizerApp:
             self.recognizer.stop()
         except Exception as e:
             messagebox.showerror("Stop Error", str(e))
+
+    # ================= UI Update =================
 
     def _schedule_update(self):
         self._update_ui()
@@ -132,7 +166,6 @@ class ChordRecognizerApp:
 def main():
     root = tk.Tk()
 
-    # малко по-нормален външен вид
     style = ttk.Style()
     try:
         style.theme_use("clam")

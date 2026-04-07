@@ -3,6 +3,9 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
 from features import extract_features_from_file
@@ -12,8 +15,10 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-# The directory names define the labels !! must correspond to the dataset structure
-CHORDS = ["Am", "C", "Em", "F", "G"]
+CHORDS = sorted(
+    d for d in os.listdir(DATA_DIR)
+    if os.path.isdir(os.path.join(DATA_DIR, d))
+)
 CHORD_TO_IDX = {c: i for i, c in enumerate(CHORDS)}
 IDX_TO_CHORD = {i: c for c, i in CHORD_TO_IDX.items()}
 
@@ -26,8 +31,6 @@ def load_dataset():
     X, y = [], []
     for chord in CHORDS:
         chord_dir = os.path.join(DATA_DIR, chord)
-        if not os.path.isdir(chord_dir):
-            raise FileNotFoundError(f"Missing folder: {chord_dir}")
 
         wavs = [f for f in os.listdir(chord_dir) if f.lower().endswith(".wav")]
         if len(wavs) == 0:
@@ -39,9 +42,10 @@ def load_dataset():
             X.append(feats)
             y.append(CHORD_TO_IDX[chord])
 
-    X = np.stack(X, axis=0)  # (N, 24)
-    y = np.array(y, dtype=np.int64)  # (N,)
+    X = np.stack(X, axis=0)
+    y = np.array(y, dtype=np.int64)
     return X, y
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim=24, num_classes=5):
@@ -59,16 +63,35 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
+def plot_confusion_matrix(cm, class_names):
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=class_names,
+        yticklabels=class_names
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix")
+    plt.xticks(rotation=45)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.show()
+
 def main():
     X, y = load_dataset()
     print(f"Dataset: X={X.shape}, y={y.shape} (classes={len(CHORDS)})")
 
-    # Stratified split keeps class balance. We are using a 75% training + 25% testing split
+    # Stratified split keeps class balance. 75% training + 25% testing split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=SEED, stratify=y
     )
 
-    # we normalize each feature dimension: x` = x-μ / σ
+    # Normalize
     mu = X_train.mean(axis=0, keepdims=True)
     sigma = X_train.std(axis=0, keepdims=True) + 1e-9
     X_train = (X_train - mu) / sigma
@@ -112,13 +135,14 @@ def main():
     with torch.no_grad():
         pred = model(X_test_t).argmax(dim=1).cpu().numpy()
 
-    print("\nConfusion matrix (rows=true, cols=pred):")
-    print(confusion_matrix(y_test, pred))
+    cm = confusion_matrix(y_test, pred)
 
     print("\nClassification report:")
     print(classification_report(y_test, pred, target_names=CHORDS))
 
-    # Save model + normalization stats
+    plot_confusion_matrix(cm, CHORDS)
+
+    # Save model
     save_path = os.path.join(MODELS_DIR, "chord_mlp.pt")
     payload = {
         "state_dict": model.state_dict(),
@@ -129,6 +153,7 @@ def main():
     }
     torch.save(payload, save_path)
     print(f"\nSaved model to: {save_path}")
+
 
 if __name__ == "__main__":
     main()

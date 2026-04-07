@@ -75,16 +75,16 @@ class RealTimeChordRecognizer:
         self.model, self.chords, self.mu, self.sigma, self.device = load_model(model_path)
 
         self.sr = 22050
-        self.window_seconds = 2.0
+        self.window_seconds = 2.5
         self.hop_seconds = 0.5
 
         self.window_samples = int(self.sr * self.window_seconds)
         self.hop_samples = int(self.sr * self.hop_seconds)
 
         self.silence_threshold = 0.01
-        self.confidence_threshold = 0.45
+        self.confidence_threshold = 0.30
 
-        self.prob_history = deque(maxlen=5)
+        self.prob_history = deque(maxlen=3)
 
         self.displayed_label = "Listening..."
         self.candidate_label = None
@@ -102,6 +102,61 @@ class RealTimeChordRecognizer:
 
         self._thread = None
         self._lock = threading.Lock()
+
+    # manual audio injection
+
+    def feed_audio_chunk(self, chunk: np.ndarray):
+        chunk = chunk.astype(np.float32)
+
+        if len(chunk) != self.hop_samples:
+            if len(chunk) < self.hop_samples:
+                chunk = np.pad(chunk, (0, self.hop_samples - len(chunk)))
+            else:
+                chunk = chunk[:self.hop_samples]
+
+        self.audio_buffer[:-self.hop_samples] = self.audio_buffer[self.hop_samples:]
+        self.audio_buffer[-self.hop_samples:] = chunk
+
+   # manual processing
+
+    def process_buffer(self):
+        energy = rms_energy(self.audio_buffer)
+
+        if energy < self.silence_threshold:
+            self.prob_history.clear()
+            raw_label = "No chord detected"
+            confidence = 0.0
+            top_text = "signal too weak"
+        else:
+            feats = extract_features(self.audio_buffer, sr=self.sr)
+            probs = predict_probs(self.model, feats, self.mu, self.sigma, self.device)
+
+            self.prob_history.append(probs)
+            avg_probs = np.max(np.stack(self.prob_history, axis=0), axis=0)
+
+            pred_idx = int(np.argmax(avg_probs))
+            pred_chord = self.chords[pred_idx]
+            confidence = float(avg_probs[pred_idx])
+
+            top_indices = np.argsort(avg_probs)[::-1][:3]
+            top_text = " | ".join(
+                f"{self.chords[i]}: {avg_probs[i]:.3f}" for i in top_indices
+            )
+
+            if confidence < self.confidence_threshold:
+                raw_label = "Uncertain"
+            else:
+                raw_label = pred_chord
+
+        self._update_display_label(raw_label)
+
+        with self._lock:
+            self.raw_label = raw_label
+            self.confidence = confidence
+            self.energy = energy
+            self.top_text = top_text
+
+    # NORMAL REALTIME
 
     def start(self):
         if self.is_running:
@@ -163,45 +218,11 @@ class RealTimeChordRecognizer:
                     audio_chunk, _ = stream.read(self.hop_samples)
                     audio_chunk = audio_chunk[:, 0]
 
-                    self.audio_buffer[:-self.hop_samples] = self.audio_buffer[self.hop_samples:]
-                    self.audio_buffer[-self.hop_samples:] = audio_chunk
-
-                    energy = rms_energy(self.audio_buffer)
-
-                    if energy < self.silence_threshold:
-                        self.prob_history.clear()
-                        raw_label = "No chord detected"
-                        confidence = 0.0
-                        top_text = "signal too weak"
-                    else:
-                        feats = extract_features(self.audio_buffer, sr=self.sr)
-                        probs = predict_probs(self.model, feats, self.mu, self.sigma, self.device)
-
-                        self.prob_history.append(probs)
-                        avg_probs = np.mean(np.stack(self.prob_history, axis=0), axis=0)
-
-                        pred_idx = int(np.argmax(avg_probs))
-                        pred_chord = self.chords[pred_idx]
-                        confidence = float(avg_probs[pred_idx])
-
-                        top_indices = np.argsort(avg_probs)[::-1][:3]
-                        top_text = " | ".join(
-                            f"{self.chords[i]}: {avg_probs[i]:.3f}" for i in top_indices
-                        )
-
-                        if confidence < self.confidence_threshold:
-                            raw_label = "Uncertain"
-                        else:
-                            raw_label = pred_chord
-
-                    self._update_display_label(raw_label)
+                    self.feed_audio_chunk(audio_chunk)
+                    self.process_buffer()
 
                     with self._lock:
                         self.status = "Listening"
-                        self.raw_label = raw_label
-                        self.confidence = confidence
-                        self.energy = energy
-                        self.top_text = top_text
 
                     time.sleep(0.01)
 
