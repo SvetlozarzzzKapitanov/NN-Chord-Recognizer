@@ -88,7 +88,7 @@ class ChordRecognizerApp:
         # ================= Demo Buttons =================
 
         demo_frame = ttk.LabelFrame(main, text="Demo (Pre-recorded Chords)")
-        demo_frame.pack(pady=10, fill="x", padx=20)
+        demo_frame.pack()
 
         chords = ["C", "G", "Am", "F", "D", "Em"]
 
