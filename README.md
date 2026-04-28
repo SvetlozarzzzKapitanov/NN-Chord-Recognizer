@@ -1,107 +1,125 @@
-# Real-Time Guitar Chord Recognition
+# Real-Time Guitar Chord Recognition using Neural Networks
 
-## Overview
-
-This project implements a real-time guitar chord recognition system using a neural network trained on audio features extracted from chord recordings.
-
-The system supports:
-
-* Offline training on labeled chord datasets
-* Real-time chord prediction using microphone input
-* GUI-based visualization of predictions and confidence
-* Demo mode using pre-recorded audio samples
+This project implements a real-time guitar chord recognition system using deep learning techniques. It processes audio input, extracts relevant features, and predicts chords using a trained neural network model.
 
 ---
 
 ## Features
 
-* Chord classification (major and minor)
-* Real-time prediction with smoothing and confidence filtering
-* Confusion matrix visualization for evaluation
-* Interactive GUI
-* Demo playback mode (pre-recorded audio → model input)
+- Real-time chord recognition from microphone input  
+- Offline prediction from `.wav` audio files  
+- Neural network trained on labeled chord dataset  
+- Supports major and minor chords  
+- Simple GUI for live interaction  
+- Improved prediction stability using aggregation strategy  
 
 ---
 
 ## How It Works
 
-1. Audio is converted into chroma-based features (mean + std)
-2. Features are normalized using training statistics
-3. A small MLP neural network predicts chord probabilities
-4. Predictions are smoothed over time (max-based aggregation)
-5. GUI displays:
+The system follows a standard machine learning pipeline:
 
-   * Detected chord
-   * Confidence
-   * Top-3 predictions
+1. **Audio Processing**
+   - Audio is captured from a microphone or loaded from a `.wav` file
+   - Preprocessing is performed using `librosa`
 
----
+2. **Feature Extraction**
+   - Audio is converted into numerical representations (e.g. chroma features)
 
-## Running the App
+3. **Model Prediction**
+   - A trained neural network outputs chord probabilities
 
-### 1. Train the model
+4. **Aggregation (Real-Time Stability)**
+   - Multiple predictions are combined over time
+   - A max-based aggregation strategy is used instead of mean to improve stability
 
-```bash
-python train.py
-```
-
-### 2. Launch GUI
-
-```bash
-python gui_app.py
-```
+5. **Output**
+   - The most probable chord is displayed in real time
 
 ---
 
-## Demo Mode (Recommended for Presentations)
+## Project Structure
 
-The GUI includes buttons that:
-
-* Play pre-recorded chord audio
-* Feed the same audio into the model
-* Display predictions in real time
-
-This provides a stable and reproducible demonstration environment.
-
-### Setup
-
-Create a folder:
+## Project Structure
 
 ```
-demo_samples/
+NN-Chord-Recognizer/
+├── src/                     # Core application logic
+│   ├── features.py          # Feature extraction
+│   ├── train.py             # Model training
+│   ├── predict.py           # Offline prediction
+│   ├── realtime_predict.py  # Real-time inference
+│   └── gui_app.py           # GUI application
+│
+├── data/                    # Training dataset (organized by chord)
+│   ├── A/
+│   ├── Am/
+│   ├── B/
+│   ├── Bm/
+│   ├── C/
+│   ├── Cm/
+│   ├── D/
+│   ├── Dm/
+│   ├── E/
+│   ├── Em/
+│   ├── F/
+│   ├── Fm/
+│   ├── G/
+│   └── Gm/
+│
+├── demo_samples/            # Example .wav files for testing
+│   ├── A.wav
+│   ├── Am.wav
+│   ├── ...
+│
+├── models/                  # Trained models
+│   └── chord_mlp.pt
+│
+├── README.md
+├── requirements.txt
+└── .gitignore
 ```
 
-Add `.wav` files (e.g.):
+---
 
-```
-C.wav
-G.wav
-Am.wav
-F.wav
-D.wav
-Em.wav
-```
+## Model Details
+
+- Architecture: Neural Network (feedforward)
+- Training:
+  - Supervised learning on labeled chord data
+- Loss Function:
+  - Cross-entropy (classification)
+- Optimization:
+  - Gradient descent-based methods
+
+The model learns patterns in extracted audio features and maps them to chord classes through nonlinear transformations.
 
 ---
 
 ## Limitations
 
-* Performance depends heavily on audio quality
-* Real-time predictions may degrade with:
-
-  * background noise
-  * low-quality microphones
-  * compressed audio (e.g., phone playback)
-* Chroma features may struggle with major/minor distinctions
+- Real-time performance depends on microphone quality  
+- Some chords may be misclassified (e.g. major vs minor)  
+- Background noise can reduce accuracy  
 
 ---
 
-## TODO
+## Future Improvements
 
-* [ ] Record demo samples for presentation
+- Expand dataset (more samples per chord)
+- Add support for additional chord types (e.g. 7th, suspended)
+- Improve robustness to noise
+- Improve the design of confidence visualization and prediction history
+- Explore mobile or web deployment
 
 ---
 
-## Notes
+## Technologies Used
 
-The system performs best when the input audio closely matches the training data conditions. Demo mode is recommended for consistent results during presentations.
+- Python
+- PyTorch
+- Librosa
+- NumPy
+- Tkinter
+
+---
